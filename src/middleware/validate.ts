@@ -24,3 +24,4 @@ export const validateBody = (schema: ZodSchema) => {
     }
   };
 };
+

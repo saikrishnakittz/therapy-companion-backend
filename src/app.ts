@@ -7,6 +7,7 @@ import { notFoundHandler } from './middleware/not-found';
 import { errorHandler } from './middleware/error-handler';
 import healthRoutes from './routes/health.routes';
 import authRoutes from './routes/auth.routes';
+import checkInRoutes from './routes/checkin.routes';
 
 export const createApp = (): Application => {
   const app: Application = express();
@@ -31,6 +32,7 @@ export const createApp = (): Application => {
   // API v1 Routes
   app.use('/api/v1', healthRoutes);
   app.use('/api/v1/auth', authRoutes);
+  app.use('/api/v1/check-ins', checkInRoutes);
 
   // 404 Fallback
   app.use(notFoundHandler);

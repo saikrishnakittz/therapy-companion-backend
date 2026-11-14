@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "db:verify": "tsx src/scripts/verify-supabase.ts",
-    "test:auth": "tsx src/scripts/test-auth-flow.ts"
+    "test:auth": "tsx src/scripts/test-auth-flow.ts",
+    "test:checkins": "tsx src/scripts/test-checkin-flow.ts"
   },
   "keywords": [
     "therapy-companion",

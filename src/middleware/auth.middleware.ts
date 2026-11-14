@@ -71,3 +71,4 @@ export const requireAuth = async (
     next(error);
   }
 };
+
