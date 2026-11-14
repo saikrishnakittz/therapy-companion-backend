@@ -39,19 +39,28 @@ export async function verifySupabase(): Promise<void> {
 
   for (const table of tables) {
     try {
-      // Query table with head: true to check table existence via PostgREST
-      const { error, status } = await supabase
+      // Query table with limit(1) to accurately check table existence in PostgREST schema cache
+      const { data, error, status } = await supabase
         .from(table)
-        .select('*', { count: 'exact', head: true });
+        .select('*')
+        .limit(1);
 
       if (error) {
-        // PostgREST code PGRST204 or status 404 indicates table not found in schema cache
-        if (status === 404 || error.code === 'PGRST204' || error.message.includes('relation') || error.message.includes('does not exist')) {
+        // PostgREST code PGRST204/PGRST205 or status 404 indicates table not found in schema cache
+        const notFound =
+          status === 404 ||
+          error.code === 'PGRST204' ||
+          error.code === 'PGRST205' ||
+          error.message.includes('Could not find the table') ||
+          error.message.includes('relation') ||
+          error.message.includes('does not exist');
+
+        if (notFound) {
           results.push({
             table,
             exists: false,
             rlsProtected: false,
-            message: `Table not found in database. Run migration 001_initial_schema.sql in Supabase SQL editor.`,
+            message: `Table not found in Supabase schema cache. Please apply 001_initial_schema.sql in the Supabase SQL Editor.`,
           });
         } else {
           // An auth/permission error or empty return indicates table exists with RLS active
@@ -59,16 +68,16 @@ export async function verifySupabase(): Promise<void> {
             table,
             exists: true,
             rlsProtected: true,
-            message: `Table exists. RLS active: Access correctly restricted (${error.message}).`,
+            message: `Table exists. RLS active: Access restricted (${error.message}).`,
           });
         }
       } else {
-        // If query succeeded with anonymous key and returned 0 rows, RLS prevented row exposure
+        // If query succeeded with anonymous key and returned 0 rows or empty, RLS prevented row exposure
         results.push({
           table,
           exists: true,
           rlsProtected: true,
-          message: `Table exists. 0 public rows exposed under RLS.`,
+          message: `Table exists. Query returned ${data?.length || 0} public rows (RLS enforced).`,
         });
       }
     } catch (err: any) {

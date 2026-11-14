@@ -1,11 +1,11 @@
 -- =============================================================================
 -- Migration: 001_initial_schema.sql
--- Description: Initial schema for Therapy Companion
+-- Description: Core schema for Therapy Companion
 -- Tables: profiles, mood_checkins, reflection_entries, activity_logs
--- Features: Foreign keys, cascade rules, indexes, updated_at triggers, RLS policies
+-- Features: Foreign keys referencing auth.users, indexes, triggers, RLS policies, idempotency
 -- =============================================================================
 
--- Enable pgcrypto / uuid-ossp for gen_random_uuid() if not already available
+-- Enable pgcrypto for gen_random_uuid()
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- =============================================================================
@@ -21,7 +21,7 @@ $$ LANGUAGE plpgsql;
 
 -- =============================================================================
 -- 2. PROFILES TABLE
--- References auth.users(id) - Created when a user signs up
+-- One-to-one with auth.users
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -43,7 +43,7 @@ CREATE TRIGGER set_profiles_updated_at
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- Profiles RLS Policies: Users can only select, insert, or update their own profile
+-- Profiles Policies
 DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
 CREATE POLICY "Users can view their own profile"
   ON public.profiles
@@ -68,18 +68,18 @@ CREATE POLICY "Users can update their own profile"
 
 -- =============================================================================
 -- 3. MOOD_CHECKINS TABLE
--- Stores daily emotional check-ins with intensity and optional journal notes
+-- Daily emotional check-in entries
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.mood_checkins (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   emotion TEXT NOT NULL,
-  intensity SMALLINT NOT NULL CHECK (intensity >= 1 AND intensity <= 5),
-  optional_note VARCHAR(500),
+  intensity INTEGER NOT NULL CHECK (intensity >= 1 AND intensity <= 5),
+  optional_note TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- Indexes for mood_checkins
+-- Indexes for user ID and creation date
 CREATE INDEX IF NOT EXISTS idx_mood_checkins_user_id ON public.mood_checkins(user_id);
 CREATE INDEX IF NOT EXISTS idx_mood_checkins_created_at ON public.mood_checkins(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mood_checkins_user_created ON public.mood_checkins(user_id, created_at DESC);
@@ -87,7 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_mood_checkins_user_created ON public.mood_checkin
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.mood_checkins ENABLE ROW LEVEL SECURITY;
 
--- Mood Check-ins RLS Policies: Users can only CRUD their own check-in records
+-- Mood Check-in Policies
 DROP POLICY IF EXISTS "Users can view their own check-ins" ON public.mood_checkins;
 CREATE POLICY "Users can view their own check-ins"
   ON public.mood_checkins
@@ -119,11 +119,11 @@ CREATE POLICY "Users can delete their own check-ins"
 
 -- =============================================================================
 -- 4. REFLECTION_ENTRIES TABLE
--- Stores multi-step guided reflection entries
+-- Multi-step guided reflections
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.reflection_entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   question_one TEXT NOT NULL CHECK (char_length(question_one) > 0),
   question_two TEXT NOT NULL CHECK (char_length(question_two) > 0),
   question_three TEXT NOT NULL CHECK (char_length(question_three) > 0),
@@ -138,7 +138,7 @@ CREATE TRIGGER set_reflection_entries_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at();
 
--- Indexes for reflection_entries
+-- Indexes for user ID and creation date
 CREATE INDEX IF NOT EXISTS idx_reflection_entries_user_id ON public.reflection_entries(user_id);
 CREATE INDEX IF NOT EXISTS idx_reflection_entries_created_at ON public.reflection_entries(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reflection_entries_user_created ON public.reflection_entries(user_id, created_at DESC);
@@ -146,7 +146,7 @@ CREATE INDEX IF NOT EXISTS idx_reflection_entries_user_created ON public.reflect
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.reflection_entries ENABLE ROW LEVEL SECURITY;
 
--- Reflection Entries RLS Policies: Users can only CRUD their own reflections
+-- Reflection Entries Policies
 DROP POLICY IF EXISTS "Users can view their own reflection entries" ON public.reflection_entries;
 CREATE POLICY "Users can view their own reflection entries"
   ON public.reflection_entries
@@ -178,27 +178,39 @@ CREATE POLICY "Users can delete their own reflection entries"
 
 -- =============================================================================
 -- 5. ACTIVITY_LOGS TABLE
--- Tracks verified exercise completions and sanctuary activity events.
--- IMPORTANT: Clients must NOT directly insert or modify activity logs.
+-- Tracks exercise completions and sanctuary activity logs.
+-- Includes idempotency support and foreign key constraints.
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS public.activity_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   event_type TEXT NOT NULL,
   exercise_id TEXT NOT NULL,
   reflection_entry_id UUID NULL REFERENCES public.reflection_entries(id) ON DELETE SET NULL,
+  idempotency_key TEXT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- Indexes for activity_logs
+-- Indexes for user ID and creation date
 CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON public.activity_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_activity_logs_reflection_entry_id ON public.activity_logs(reflection_entry_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON public.activity_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_user_created ON public.activity_logs(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_reflection_entry_id ON public.activity_logs(reflection_entry_id);
+
+-- Unique idempotency index for exercise completion: prevents duplicate completions of the same reflection/exercise
+CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_logs_idempotency_key 
+  ON public.activity_logs(idempotency_key) 
+  WHERE idempotency_key IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_logs_exercise_unique 
+  ON public.activity_logs(user_id, exercise_id, reflection_entry_id) 
+  WHERE reflection_entry_id IS NOT NULL;
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 
--- Activity Logs RLS Policy: Users can view their own activity logs
+-- Activity Logs Policies:
+-- Users can READ only their own activity logs.
 DROP POLICY IF EXISTS "Users can view their own activity logs" ON public.activity_logs;
 CREATE POLICY "Users can view their own activity logs"
   ON public.activity_logs
@@ -206,13 +218,13 @@ CREATE POLICY "Users can view their own activity logs"
   TO authenticated
   USING (auth.uid() = user_id);
 
--- NOTE: By enabling RLS and defining ONLY a SELECT policy for authenticated users,
--- direct INSERT, UPDATE, and DELETE operations from clients are strictly blocked by PostgreSQL.
--- Activity logging must be performed through verified server endpoints or SECURITY DEFINER functions.
+-- NOTE: Ordinary authenticated clients CANNOT directly insert or modify activity completion events.
+-- No INSERT, UPDATE, or DELETE policy is granted to authenticated clients on activity_logs.
+-- Activity completion events must be logged by verified server endpoints or SECURITY DEFINER functions.
 
 -- =============================================================================
--- 6. OPTIONAL PROFILE AUTO-CREATION HOOK
--- Automatically creates a public.profiles record when a user signs up via auth.users
+-- 6. PROFILE AUTO-CREATION HOOK ON SIGNUP
+-- Automatically creates a public.profiles record when a new user registers in auth.users
 -- =============================================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$

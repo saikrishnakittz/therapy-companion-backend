@@ -45,3 +45,4 @@ export const createAuthenticatedClient = (accessToken: string): SupabaseClient =
 };
 
 export { isSupabaseConfigured };
+
