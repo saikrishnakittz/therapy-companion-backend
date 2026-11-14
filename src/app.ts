@@ -9,6 +9,8 @@ import healthRoutes from './routes/health.routes';
 import authRoutes from './routes/auth.routes';
 import checkInRoutes from './routes/checkin.routes';
 import reflectionRoutes from './routes/reflection.routes';
+import exerciseRoutes from './routes/exercise.routes';
+import activityRoutes from './routes/activity.routes';
 
 export const createApp = (): Application => {
   const app: Application = express();
@@ -35,6 +37,8 @@ export const createApp = (): Application => {
   app.use('/api/v1/auth', authRoutes);
   app.use('/api/v1/check-ins', checkInRoutes);
   app.use('/api/v1/reflections', reflectionRoutes);
+  app.use('/api/v1/exercises', exerciseRoutes);
+  app.use('/api/v1/activity-logs', activityRoutes);
 
   // 404 Fallback
   app.use(notFoundHandler);
