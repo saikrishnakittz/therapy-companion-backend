@@ -34,3 +34,4 @@ export const activityLogQuerySchema = z.object({
 
 export type CompleteExerciseInput = z.infer<typeof completeExerciseSchema>;
 export type ActivityLogQueryInput = z.infer<typeof activityLogQuerySchema>;
+

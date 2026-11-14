@@ -18,18 +18,32 @@ export const createApp = (): Application => {
   // Security headers with Helmet
   app.use(helmet());
 
-  // Cross-Origin Resource Sharing
+  // Configurable Cross-Origin Resource Sharing
+  const allowedOrigins = env.CLIENT_ORIGIN.split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
   app.use(
     cors({
-      origin: env.CLIENT_ORIGIN,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (e.g. mobile apps, curl, native tools)
+        if (!origin) {
+          return callback(null, true);
+        }
+        if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+        return callback(new Error(`Origin '${origin}' not allowed by CORS policy`));
+      },
       credentials: true,
     })
   );
 
-  // Body parser for JSON
-  app.use(express.json());
+  // Safe body parser for JSON with request size limit to mitigate DoS attacks
+  app.use(express.json({ limit: '100kb' }));
 
   // Safe request logging
+
   app.use(requestLogger);
 
   // API v1 Routes

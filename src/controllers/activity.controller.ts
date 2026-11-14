@@ -71,3 +71,4 @@ export const getActivitySummary = async (
     next(err);
   }
 };
+

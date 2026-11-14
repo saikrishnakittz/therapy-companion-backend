@@ -104,3 +104,4 @@ $$;
 -- 3. Restrict permissions: Revoke from PUBLIC, grant only to authenticated users
 REVOKE ALL ON FUNCTION public.complete_exercise(TEXT, UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.complete_exercise(TEXT, UUID) TO authenticated;
+

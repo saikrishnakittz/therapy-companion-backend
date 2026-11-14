@@ -6,13 +6,16 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "nodemon dist/server.js",
+    "start": "node dist/server.js",
+    "start:dev": "nodemon dist/server.js",
     "typecheck": "tsc --noEmit",
     "db:verify": "tsx src/scripts/verify-supabase.ts",
     "test:auth": "tsx src/scripts/test-auth-flow.ts",
     "test:checkins": "tsx src/scripts/test-checkin-flow.ts",
     "test:reflections": "tsx src/scripts/test-reflection-flow.ts",
-    "test:exercises": "tsx src/scripts/test-exercise-flow.ts"
+    "test:exercises": "tsx src/scripts/test-exercise-flow.ts",
+    "test:audit": "tsx src/scripts/test-complete-audit.ts",
+    "test:dist": "tsx src/scripts/verify-dist.ts"
   },
   "keywords": [
     "therapy-companion",

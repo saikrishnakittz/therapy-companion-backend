@@ -17,3 +17,4 @@ router.get('/summary', getActivitySummary);
 router.get('/', getActivityLogs);
 
 export default router;
+

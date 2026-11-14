@@ -13,3 +13,4 @@ router.use(requireAuth);
 router.post('/complete', validateBody(completeExerciseSchema), completeExercise);
 
 export default router;
+
