@@ -1,7 +1,9 @@
 import app from './app';
 import { env } from './config/env';
 
-const server = app.listen(env.PORT, () => {
+const HOST = '0.0.0.0';
+
+const server = app.listen(env.PORT, HOST, () => {
   console.log(`🚀 Therapy Companion API server running in ${env.NODE_ENV} mode on port ${env.PORT}`);
   console.log(`🔗 Health check endpoint: http://localhost:${env.PORT}/api/v1/health`);
 });
