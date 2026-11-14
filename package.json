@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "db:verify": "tsx src/scripts/verify-supabase.ts"
+    "db:verify": "tsx src/scripts/verify-supabase.ts",
+    "test:auth": "tsx src/scripts/test-auth-flow.ts"
   },
   "keywords": [
     "therapy-companion",
