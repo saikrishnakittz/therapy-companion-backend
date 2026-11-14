@@ -16,3 +16,4 @@ router.post('/', validateBody(createCheckInSchema), createCheckIn);
 router.get('/', getCheckInHistory);
 
 export default router;
+

@@ -71,3 +71,4 @@ export const getCheckInHistory = async (
     next(err);
   }
 };
+

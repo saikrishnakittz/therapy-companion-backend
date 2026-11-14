@@ -100,10 +100,16 @@ export async function runAuthTests(): Promise<void> {
         `Status ${regRes.status}, User ID: ${userId ? userId.substring(0, 8) + '...' : 'none'}, EmailVerificationRequired: ${Boolean(regRes.body?.emailVerificationRequired)}`
       );
     } else if (regRes.status === 429) {
+      const isExpected429 =
+        regRes.body?.success === false &&
+        regRes.body?.statusCode === 429 &&
+        typeof regRes.body?.message === 'string' &&
+        regRes.body?.message.toLowerCase().includes('wait');
+
       recordResult(
-        'User Registration (Supabase Auth active)',
-        true,
-        `Status 429: Supabase Auth live & enforcing project email rate limit`
+        'User Registration Rate Limit Handling (429 Too Many Requests)',
+        isExpected429,
+        `Status 429 preserved, Code: "${regRes.body?.code}", Message: "${regRes.body?.message}"`
       );
     } else {
       recordResult(

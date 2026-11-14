@@ -36,8 +36,34 @@ export const register = async (
     });
 
     if (error) {
-      const msg = error.message.toLowerCase();
-      if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('unique constraint')) {
+      const msg = error.message ? error.message.toLowerCase() : '';
+      const isRateLimited =
+        error.status === 429 ||
+        error.code === 'over_email_send_rate_limit' ||
+        error.code === 'over_request_rate_limit' ||
+        msg.includes('rate limit');
+
+      if (isRateLimited) {
+        // Safe logging without passwords or sensitive credentials
+        console.warn(
+          `[AUTH] Rate limit triggered by Supabase Auth (Status: ${error.status || 429}, Code: ${error.code || 'over_email_send_rate_limit'})`
+        );
+
+        res.status(429).json({
+          success: false,
+          statusCode: 429,
+          code: error.code || 'over_email_send_rate_limit',
+          message:
+            'Too many registration attempts. Please wait a few minutes before trying again.',
+        });
+        return;
+      }
+
+      if (
+        msg.includes('already registered') ||
+        msg.includes('already exists') ||
+        msg.includes('unique constraint')
+      ) {
         res.status(409).json({
           success: false,
           message: 'An account with this email address already exists.',
@@ -45,15 +71,7 @@ export const register = async (
         return;
       }
 
-      if (msg.includes('rate limit')) {
-        res.status(429).json({
-          success: false,
-          message: 'Email rate limit exceeded by authentication service. Please wait before attempting registration again.',
-        });
-        return;
-      }
-
-      res.status(400).json({
+      res.status(error.status && error.status >= 400 && error.status < 500 ? error.status : 400).json({
         success: false,
         message: error.message || 'Unable to register user.',
       });
@@ -110,11 +128,11 @@ export const register = async (
       },
       session: data.session
         ? {
-            accessToken: data.session.access_token,
-            refreshToken: data.session.refresh_token,
-            expiresIn: data.session.expires_in,
-            expiresAt: data.session.expires_at,
-          }
+          accessToken: data.session.access_token,
+          refreshToken: data.session.refresh_token,
+          expiresIn: data.session.expires_in,
+          expiresAt: data.session.expires_at,
+        }
         : null,
       emailVerificationRequired: !hasSession,
     });
@@ -150,7 +168,27 @@ export const login = async (
     });
 
     if (error || !data.user || !data.session) {
-      const msg = error?.message.toLowerCase() || '';
+      const msg = error?.message ? error.message.toLowerCase() : '';
+      const isRateLimited =
+        error?.status === 429 ||
+        error?.code === 'over_request_rate_limit' ||
+        error?.code === 'over_email_send_rate_limit' ||
+        msg.includes('rate limit');
+
+      if (isRateLimited) {
+        console.warn(
+          `[AUTH] Login rate limit triggered by Supabase Auth (Status: ${error?.status || 429}, Code: ${error?.code || 'over_request_rate_limit'})`
+        );
+
+        res.status(429).json({
+          success: false,
+          statusCode: 429,
+          code: error?.code || 'over_request_rate_limit',
+          message:
+            'Too many login attempts. Please wait a few minutes before trying again.',
+        });
+        return;
+      }
 
       if (msg.includes('email not confirmed')) {
         res.status(403).json({

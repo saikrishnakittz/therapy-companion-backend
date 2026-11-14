@@ -55,3 +55,4 @@ export const checkInQuerySchema = z.object({
 
 export type CreateCheckInInput = z.infer<typeof createCheckInSchema>;
 export type CheckInQueryInput = z.infer<typeof checkInQuerySchema>;
+
