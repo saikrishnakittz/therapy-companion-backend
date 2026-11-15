@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { ReflectionService } from '../services/reflection.service';
+import { AiService } from '../services/ai.service';
+import { isOpenAiConfigured } from '../config/openai';
 import {
   CreateReflectionInput,
+  GenerateAiReflectionInput,
   reflectionParamSchema,
   reflectionQuerySchema,
 } from '../validators/reflection.validator';
@@ -166,6 +169,105 @@ export const deleteReflection = async (
     res.status(200).json({
       success: true,
       message: 'Reflection entry deleted successfully',
+    });
+  } catch (err: any) {
+    next(err);
+  }
+};
+
+/**
+ * POST /api/v1/reflections/:id/ai-reflection
+ * Generates an empathetic, non-clinical AI reflection via OpenAI for the authenticated user.
+ * Explicit user consent is mandatory and validated before any AI request is initiated.
+ */
+export const generateAiReflection = async (
+  req: Request<{ id: string }, {}, GenerateAiReflectionInput>,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const userClient = req.supabase!;
+    const reflectionId = req.params.id;
+
+    // 1. Verify AI provider prerequisites
+    const activeProvider = AiService.getActiveProvider();
+    if (activeProvider.name === 'openai' && !isOpenAiConfigured()) {
+      res.status(503).json({
+        success: false,
+        message:
+          'AI reflection service is currently unconfigured. Please ensure OPENAI_API_KEY is set in Render environment variables, or set AI_PROVIDER=mock for mock mode.',
+      });
+      return;
+    }
+
+    // 2. Resolve answers: either from request body or by looking up saved reflection in DB
+    let q1 = req.body.questionOne?.trim();
+    let q2 = req.body.questionTwo?.trim();
+    let q3 = req.body.questionThree?.trim();
+
+    // If answers were not provided in body, fetch them from DB using reflectionId
+    if (!q1 || !q2 || !q3) {
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          reflectionId
+        );
+      if (!isUuid) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Please provide question answers in the request body, or a valid reflection UUID.',
+        });
+        return;
+      }
+
+      const existingRecord = await ReflectionService.getReflectionById(
+        userClient,
+        userId,
+        reflectionId
+      );
+
+      if (!existingRecord) {
+        res.status(404).json({
+          success: false,
+          message: 'Reflection entry not found for this user.',
+        });
+        return;
+      }
+
+      q1 = q1 || existingRecord.questionOne;
+      q2 = q2 || existingRecord.questionTwo;
+      q3 = q3 || existingRecord.questionThree;
+    }
+
+    if (!q1 || !q2 || !q3) {
+      res.status(400).json({
+        success: false,
+        message:
+          'All three reflection answers are required to generate an AI reflection.',
+      });
+      return;
+    }
+
+    // 3. Call AI Service (never log journal content or result)
+    const result = await AiService.generateReflection({
+      questionOne: q1,
+      questionTwo: q2,
+      questionThree: q3,
+      communicationStyle: req.body.communicationStyle,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'AI reflection generated successfully',
+      data: {
+        reflectionId,
+        generatedText: result.generatedText,
+        keyThemes: result.keyThemes,
+        model: result.model,
+        provider: result.provider,
+        generatedAt: result.generatedAt,
+      },
     });
   } catch (err: any) {
     next(err);

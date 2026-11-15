@@ -13,6 +13,7 @@
     "test:auth": "tsx src/scripts/test-auth-flow.ts",
     "test:checkins": "tsx src/scripts/test-checkin-flow.ts",
     "test:reflections": "tsx src/scripts/test-reflection-flow.ts",
+    "test:ai": "tsx src/scripts/test-ai-flow.ts",
     "test:exercises": "tsx src/scripts/test-exercise-flow.ts",
     "test:audit": "tsx src/scripts/test-complete-audit.ts",
     "test:dist": "tsx src/scripts/verify-dist.ts"
@@ -31,6 +32,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
+    "openai": "^7.57.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {

@@ -41,6 +41,34 @@ export const reflectionQuerySchema = z.object({
     }),
 });
 
+export const generateAiReflectionSchema = z.object({
+  consentGranted: z.literal(true, {
+    errorMap: () => ({
+      message: 'Explicit user consent is required before processing reflection with OpenAI.',
+    }),
+  }),
+  questionOne: z
+    .string()
+    .trim()
+    .min(1, 'Answer to question one cannot be empty')
+    .max(1000, 'Answer to question one cannot exceed 1000 characters')
+    .optional(),
+  questionTwo: z
+    .string()
+    .trim()
+    .min(1, 'Answer to question two cannot be empty')
+    .max(1000, 'Answer to question two cannot exceed 1000 characters')
+    .optional(),
+  questionThree: z
+    .string()
+    .trim()
+    .min(1, 'Answer to question three cannot be empty')
+    .max(1000, 'Answer to question three cannot exceed 1000 characters')
+    .optional(),
+  communicationStyle: z.string().trim().max(100).optional(),
+});
+
 export type CreateReflectionInput = z.infer<typeof createReflectionSchema>;
 export type ReflectionQueryInput = z.infer<typeof reflectionQuerySchema>;
+export type GenerateAiReflectionInput = z.infer<typeof generateAiReflectionSchema>;
 

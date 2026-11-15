@@ -20,6 +20,9 @@ const envSchema = z.object({
       }
     ),
   SUPABASE_ANON_KEY: z.string().optional(),
+  AI_PROVIDER: z.enum(['mock', 'openai']).default('mock'),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default('gpt-4o-mini'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -55,5 +58,38 @@ export const getSupabaseConfig = (): { supabaseUrl: string; supabaseAnonKey: str
   return {
     supabaseUrl: env.SUPABASE_URL as string,
     supabaseAnonKey: env.SUPABASE_ANON_KEY as string,
+  };
+};
+
+/**
+ * Returns the currently active AI provider ('mock' or 'openai').
+ */
+export const getAiProvider = (): 'mock' | 'openai' => {
+  return env.AI_PROVIDER;
+};
+
+/**
+ * Checks whether the OpenAI API key is configured.
+ */
+export const isOpenAiConfigured = (): boolean => {
+  return (
+    typeof env.OPENAI_API_KEY === 'string' &&
+    env.OPENAI_API_KEY.trim().length > 0 &&
+    !env.OPENAI_API_KEY.includes('your-openai-api-key')
+  );
+};
+
+/**
+ * Returns validated OpenAI configuration or throws a configuration error.
+ */
+export const getOpenAiConfig = (): { apiKey: string; model: string } => {
+  if (!isOpenAiConfigured()) {
+    throw new Error(
+      'Missing OpenAI configuration: OPENAI_API_KEY must be set in backend/.env or Render environment variables'
+    );
+  }
+  return {
+    apiKey: env.OPENAI_API_KEY as string,
+    model: env.OPENAI_MODEL,
   };
 };
