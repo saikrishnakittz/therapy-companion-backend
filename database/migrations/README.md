@@ -18,6 +18,12 @@ This directory contains version-controlled SQL migrations for the Therapy Compan
   - Enforces `auth.uid()`, ownership of `reflection_entry_id`, exercise verification, and idempotency.
   - Revokes permissions from `PUBLIC` and grants execution strictly to `authenticated`.
 
+- **`003_exercise_automation_fix.sql`** (Recommended Complete Fix):
+  - Solves RLS insert policy errors on `activity_logs`.
+  - Adds narrowly scoped policy: `Users can insert their own activity logs` (`WITH CHECK (auth.uid() = user_id)`).
+  - Deploys `complete_exercise` RPC function supporting all aliases (`understanding-emotional-triggers`, `emotional-triggers`, `understanding-triggers`).
+  - Ensures both the direct insert and RPC paths succeed seamlessly.
+
 ---
 
 ## How to Apply Migrations in Supabase SQL Editor

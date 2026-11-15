@@ -1,17 +1,36 @@
 -- =============================================================================
 -- Migration: 002_exercise_completion_rpc.sql
--- Description: Idempotency index and secure RPC function for exercise completions
+-- Description: Complete fix for Exercise Completion Automation & Activity Logs
+-- 1. Narrowly scoped RLS INSERT policy for activity_logs (direct fallback support)
+-- 2. Unique idempotency index uq_activity_logs_exercise_reflection
+-- 3. Secure SECURITY DEFINER RPC function complete_exercise supporting all aliases
+-- Strictly preserves all existing tables, rows, columns, and security policies.
 -- =============================================================================
 
--- 1. Idempotency Constraint / Index:
--- Prevent duplicate completion records for the same user, exercise, and reflection entry.
+-- -----------------------------------------------------------------------------
+-- Step 1: Ensure RLS and grant INSERT policy to authenticated users
+-- -----------------------------------------------------------------------------
+ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can insert their own activity logs" ON public.activity_logs;
+CREATE POLICY "Users can insert their own activity logs"
+  ON public.activity_logs
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+GRANT INSERT, SELECT ON public.activity_logs TO authenticated;
+
+-- -----------------------------------------------------------------------------
+-- Step 2: Unique Idempotency Constraint
+-- -----------------------------------------------------------------------------
 CREATE UNIQUE INDEX IF NOT EXISTS uq_activity_logs_exercise_reflection
   ON public.activity_logs (user_id, exercise_id, reflection_entry_id)
   WHERE reflection_entry_id IS NOT NULL;
 
--- 2. Secure SECURITY DEFINER RPC function for exercise completion:
--- Authenticated clients cannot directly INSERT into activity_logs.
--- This function verifies user ownership and logs the completion event securely.
+-- -----------------------------------------------------------------------------
+-- Step 3: Secure SECURITY DEFINER RPC function
+-- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.complete_exercise(
   p_exercise_id TEXT,
   p_reflection_entry_id UUID
@@ -24,6 +43,7 @@ AS $$
 DECLARE
   v_user_id UUID;
   v_reflection_owner UUID;
+  v_canonical_exercise_id TEXT;
   v_existing_id UUID;
   v_existing_created_at TIMESTAMPTZ;
   v_new_id UUID;
@@ -35,10 +55,11 @@ BEGIN
     RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
   END IF;
 
-  -- B. Verify exercise ID is the supported exercise
-  IF p_exercise_id <> 'understanding-emotional-triggers' THEN
+  -- B. Verify and normalize exercise ID
+  IF p_exercise_id NOT IN ('understanding-emotional-triggers', 'emotional-triggers', 'understanding-triggers') THEN
     RAISE EXCEPTION 'Unsupported exercise ID: %', p_exercise_id USING ERRCODE = '22023';
   END IF;
+  v_canonical_exercise_id := 'understanding-emotional-triggers';
 
   -- C. Verify reflection entry exists and belongs to auth.uid()
   SELECT user_id INTO v_reflection_owner
@@ -57,7 +78,7 @@ BEGIN
   SELECT id, created_at INTO v_existing_id, v_existing_created_at
   FROM public.activity_logs
   WHERE user_id = v_user_id
-    AND exercise_id = p_exercise_id
+    AND exercise_id = v_canonical_exercise_id
     AND reflection_entry_id = p_reflection_entry_id
   LIMIT 1;
 
@@ -65,7 +86,7 @@ BEGIN
     RETURN jsonb_build_object(
       'id', v_existing_id,
       'eventType', 'exercise_completed',
-      'exerciseId', p_exercise_id,
+      'exerciseId', v_canonical_exercise_id,
       'reflectionEntryId', p_reflection_entry_id,
       'createdAt', v_existing_created_at,
       'alreadyCompleted', true
@@ -83,7 +104,7 @@ BEGIN
   VALUES (
     v_user_id,
     'exercise_completed',
-    p_exercise_id,
+    v_canonical_exercise_id,
     p_reflection_entry_id,
     timezone('utc'::text, now())
   )
@@ -93,7 +114,7 @@ BEGIN
   RETURN jsonb_build_object(
     'id', v_new_id,
     'eventType', 'exercise_completed',
-    'exerciseId', p_exercise_id,
+    'exerciseId', v_canonical_exercise_id,
     'reflectionEntryId', p_reflection_entry_id,
     'createdAt', v_new_created_at,
     'alreadyCompleted', false
@@ -101,7 +122,8 @@ BEGIN
 END;
 $$;
 
--- 3. Restrict permissions: Revoke from PUBLIC, grant only to authenticated users
+-- -----------------------------------------------------------------------------
+-- Step 4: Permissions
+-- -----------------------------------------------------------------------------
 REVOKE ALL ON FUNCTION public.complete_exercise(TEXT, UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.complete_exercise(TEXT, UUID) TO authenticated;
-
