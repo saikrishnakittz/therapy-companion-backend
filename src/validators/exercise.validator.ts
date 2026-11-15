@@ -1,13 +1,20 @@
 import { z } from 'zod';
 
-export const SUPPORTED_EXERCISES = ['understanding-emotional-triggers'] as const;
+export const SUPPORTED_EXERCISES = [
+  'understanding-emotional-triggers',
+  'understanding-triggers',
+] as const;
 
 export const completeExerciseSchema = z.object({
-  exerciseId: z.literal('understanding-emotional-triggers', {
-    errorMap: () => ({
-      message: 'Invalid or unsupported exerciseId. Currently supported: "understanding-emotional-triggers"',
-    }),
-  }),
+  exerciseId: z
+    .enum(SUPPORTED_EXERCISES, {
+      errorMap: () => ({
+        message: 'Invalid or unsupported exerciseId. Currently supported: "understanding-emotional-triggers"',
+      }),
+    })
+    .transform((val) =>
+      val === 'understanding-triggers' ? 'understanding-emotional-triggers' : val
+    ),
   reflectionEntryId: z
     .string({ required_error: 'reflectionEntryId is required' })
     .uuid('reflectionEntryId must be a valid UUID'),
